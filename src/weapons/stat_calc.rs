@@ -1,10 +1,10 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use super::{reserve_calc::calc_reserves, Stat, Weapon};
 use crate::{
     d2_enums::{MetersPerSecond, Seconds, StatHashes, WeaponType},
     perks::{
-        Perks, get_dmg_modifier, get_explosion_data, get_firing_modifier, get_flinch_modifier,
+        get_dmg_modifier, get_explosion_data, get_firing_modifier, get_flinch_modifier,
         get_handling_modifier, get_magazine_modifier, get_range_modifier, get_reload_modifier,
         get_reserve_modifier, get_velocity_modifier,
         lib::{
@@ -12,6 +12,7 @@ use crate::{
             HandlingModifierResponse, InventoryModifierResponse, MagazineModifierResponse,
             RangeModifierResponse, ReloadModifierResponse,
         },
+        Perks,
     },
     types::rs_types::{
         AmmoFormula, AmmoResponse, FiringResponse, HandlingFormula, HandlingResponse, RangeFormula,
@@ -20,13 +21,9 @@ use crate::{
 };
 
 impl ReloadFormula {
-    pub fn calc_reload_time_formula(
-        &self,
-        _reload_stat: i32,
-        _modifiers: ReloadModifierResponse,
-    ) -> ReloadResponse {
-        let reload_stat = (_reload_stat + _modifiers.reload_stat_add).clamp(0, 100) as f64;
-        let reload_time = self.reload_data.solve_at(reload_stat) * _modifiers.reload_time_scale;
+    fn calc_reload_time_formula(&self, _reload_stat: i32) -> ReloadResponse {
+        let reload_stat = (_reload_stat) as f64;
+        let reload_time = self.reload_data.solve_at(reload_stat);
         ReloadResponse {
             reload_time,
             ammo_time: reload_time * self.ammo_percent,
@@ -41,27 +38,35 @@ impl Weapon {
         _cached_data: Option<&mut HashMap<String, f64>>,
         _pvp: bool,
     ) -> ReloadResponse {
-        let reload_stat = self
+        let mut reload_stat = self
             .stats
             .get(&StatHashes::RELOAD.into())
             .unwrap_or(&Stat::new())
-            .val();
+            .perk_val();
         let mut default_chd_dt = HashMap::new();
         let cached_data = _cached_data.unwrap_or(&mut default_chd_dt);
+        if self.weapon_type == WeaponType::BOW {
+            reload_stat = reload_stat.clamp(0, 80);
+        }
+        let mut out;
         if _calc_input.is_some() {
             let modifiers =
                 get_reload_modifier(self.list_perks(), &_calc_input.unwrap(), _pvp, cached_data);
-            self.reload_formula
-                .calc_reload_time_formula(reload_stat, modifiers)
+            out = self.reload_formula.calc_reload_time_formula(reload_stat);
+            out.reload_time *= modifiers.reload_time_scale;
         } else {
-            self.reload_formula
-                .calc_reload_time_formula(reload_stat, ReloadModifierResponse::default())
+            out = self.reload_formula.calc_reload_time_formula(reload_stat);
         }
+        if self.weapon_type == WeaponType::BOW {
+            out.reload_time = out.reload_time.clamp(0.6, 5.0);
+        }
+
+        out
     }
 }
 
 impl RangeFormula {
-    pub fn calc_range_falloff_formula(
+    fn calc_range_falloff_formula(
         &self,
         _range_stat: i32,
         _zoom_stat: i32,
@@ -136,23 +141,25 @@ impl Weapon {
 }
 
 impl HandlingFormula {
-    pub fn calc_handling_times_formula(
+    fn calc_handling_times_formula(
         &self,
         _handling_stat: i32,
         _modifiers: HandlingModifierResponse,
     ) -> HandlingResponse {
-        let handling_stat = (_handling_stat + _modifiers.handling_stat_add).clamp(0, 100) as f64;
-        let ready_time = self.ready.solve_at(handling_stat) * _modifiers.handling_swap_scale;
-        let mut stow_time = self.stow.solve_at(handling_stat) * _modifiers.handling_swap_scale;
-        let ads_time = self.ads.solve_at(handling_stat) * _modifiers.handling_ads_scale;
-        if stow_time < self.stow.solve_at(100.0) {
+        let handling_stat = (_handling_stat + _modifiers.stat_add).clamp(0, 100) as f64;
+        let ready_time = self.ready.solve_at(handling_stat) * _modifiers.draw_scale;
+        let mut stow_time = self.stow.solve_at(handling_stat) * _modifiers.stow_scale;
+        let ads_time = self.ads.solve_at(handling_stat) * _modifiers.ads_scale;
+        if stow_time < self.stow.solve_at(100.0)
+            && (self.stow.vpp < 0_f64 && self.stow.evpp < 0_f64)
+        {
             stow_time = self.stow.solve_at(100.0);
         }
         HandlingResponse {
             ready_time,
             stow_time,
             ads_time,
-            timestamp: self.timestamp
+            timestamp: self.timestamp,
         }
     }
 }
@@ -183,7 +190,7 @@ impl Weapon {
 }
 
 impl AmmoFormula {
-    pub fn calc_ammo_size_formula(
+    fn calc_ammo_size_formula(
         &self,
         _mag_stat: i32,
         _mag_modifiers: MagazineModifierResponse,
@@ -214,7 +221,7 @@ impl AmmoFormula {
 
         let mut reserve_size = 1;
         if _calc_inv {
-            reserve_size = calc_reserves(raw_mag_size, _mag_stat as i32, inv_stat as i32, _inv_id);
+            reserve_size = calc_reserves(raw_mag_size, _mag_stat as i32, inv_stat as i32, _inv_id, _inv_modifiers.inv_scale);
         }
         AmmoResponse {
             mag_size,
@@ -520,13 +527,13 @@ impl Weapon {
             .perk_val()
             .clamp(0, 100)
             .into();
-        if self.perks.get(&1449897496).is_some() && self.weapon_type == WeaponType::BOW{
+        if self.perks.get(&1449897496).is_some() && self.weapon_type == WeaponType::BOW {
             return Seconds::INFINITY;
         }
         match self.intrinsic_hash {
-            715195141 => stability * 1.0 / 400.0 + 0.3,
-            2108556049 => stability * 3.0 / 1000.0 + 0.5,
-            _ => 0.0,
+            906 => stability * 1.0 / 400.0 + 0.3,
+            905 => stability * 3.0 / 1000.0 + 0.5,
+            _ => Seconds::NAN,
         }
     }
 }
@@ -552,28 +559,31 @@ impl Weapon {
                 .into();
             return 100.0 / (guard_endruance * -0.75 + 80.0);
         }
-        0.0
+        Seconds::NAN
     }
 }
 
 impl Weapon {
-    fn get_misc_stats(
+    pub fn get_misc_stats(
         &self,
         _calc_input: Option<CalculationInput>,
         _pvp: bool,
-        _cached_data: Option<&mut HashMap<String, f64>>,
     ) -> HashMap<String, f64> {
         let mut buffer: HashMap<String, f64> = HashMap::new();
+        let mut cached_data: HashMap<String, f64> = HashMap::new();
 
-        match self.weapon_type {
-            WeaponType::ROCKET | WeaponType::GRENADELAUNCHER | WeaponType::GLAIVE => buffer.insert(
+        if matches!(
+            self.weapon_type,
+            WeaponType::ROCKET | WeaponType::GRENADELAUNCHER | WeaponType::GLAIVE
+        ) {
+            buffer.insert(
                 "velocity".to_string(),
-                self.calc_projectile_velocity(_calc_input, _pvp, _cached_data),
-            ),
-            _ => None,
+                self.calc_projectile_velocity(_calc_input, _pvp, Some(&mut cached_data)),
+            );
         };
 
-        if self.weapon_type == WeaponType::GLAIVE {
+        if matches!(self.weapon_type, WeaponType::GLAIVE) {
+            // add "| WeaponType::SWORD" to matches when swords work
             buffer.insert("shield_duration".to_string(), self.calc_shield_duration());
         }
 

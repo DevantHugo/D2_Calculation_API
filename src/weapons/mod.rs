@@ -2,7 +2,7 @@ pub mod dps_calc;
 pub mod reserve_calc;
 pub mod stat_calc;
 pub mod ttk_calc;
-pub mod weapon_formulas;
+pub mod weapon_constructor;
 
 use std::collections::HashMap;
 
@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::d2_enums::{AmmoType, DamageType, StatHashes, WeaponType};
 use crate::enemies::Enemy;
 use crate::perks::{
-    get_magazine_modifier, get_perk_stats, get_reserve_modifier, lib::CalculationInput, Perk,
+    get_magazine_modifier, get_reserve_modifier, get_stat_bumps, lib::CalculationInput, Perk,
 };
 
 use crate::types::rs_types::{
-    AmmoFormula, DamageMods, DpsResponse, HandlingFormula, RangeFormula, ReloadFormula, FiringData,
+    AmmoFormula, DamageMods, DpsResponse, FiringData, HandlingFormula, RangeFormula, ReloadFormula,
 };
 
 use self::dps_calc::complex_dps_calc;
@@ -53,8 +53,6 @@ impl From<i32> for Stat {
         }
     }
 }
-
-
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Weapon {
@@ -138,6 +136,7 @@ impl Weapon {
             &self.perk_value_map,
             &self.weapon_type,
             &self.ammo_type,
+            &self.damage_type,
             self.firing_data.crit_mult,
         )
     }
@@ -195,9 +194,10 @@ impl Weapon {
             &self.perk_value_map,
             &self.weapon_type,
             &self.ammo_type,
+            &self.damage_type,
             self.firing_data.crit_mult,
         );
-        let inter_var = get_perk_stats(self.list_perks(), input, false, &mut HashMap::new());
+        let inter_var = get_stat_bumps(self.list_perks(), input, false, &mut HashMap::new());
         let dynamic_stats = &inter_var[0];
         let static_stats = &inter_var[1];
         for (key, stat) in &mut self.stats {
@@ -218,7 +218,6 @@ impl Weapon {
 impl Default for Weapon {
     fn default() -> Weapon {
         Weapon {
-
             intrinsic_hash: 0,
             hash: 0,
 
@@ -240,3 +239,8 @@ impl Default for Weapon {
         }
     }
 }
+
+// //making this separate for organization
+// impl Weapon {
+//     pub fn get_damage(&self)
+// }

@@ -7,15 +7,22 @@ use crate::{
     enemies::EnemyType,
     perks::Perk,
     types::rs_types::StatQuadraticFormula,
-    weapons::{ttk_calc::{ResillienceSummary, OptimalKillData, BodyKillData}, Stat},
+    weapons::{
+        ttk_calc::{BodyKillData, OptimalKillData, ResillienceSummary},
+        Stat,
+    },
 };
 use serde::{Deserialize, Serialize};
 // use tsify::Tsify;
-use wasm_bindgen::{prelude::wasm_bindgen, JsValue, convert::{IntoWasmAbi, WasmSlice}};
+use wasm_bindgen::{
+    convert::{IntoWasmAbi, WasmSlice},
+    prelude::wasm_bindgen,
+    JsValue,
+};
 
 use super::rs_types::{
-    AmmoFormula, AmmoResponse, DamageMods, DpsResponse, FiringResponse, HandlingFormula,
-    HandlingResponse, RangeFormula, RangeResponse, ReloadFormula, ReloadResponse, FiringData
+    AmmoFormula, AmmoResponse, DamageMods, DpsResponse, FiringData, FiringResponse,
+    HandlingFormula, HandlingResponse, RangeFormula, RangeResponse, ReloadFormula, ReloadResponse,
 };
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -93,7 +100,7 @@ impl From<ReloadResponse> for JsReloadResponse {
 #[derive(Debug, Clone, Copy, Serialize)]
 #[wasm_bindgen(js_name = "AmmoResponse", inspectable)]
 pub struct JsAmmoResponse {
-    #[wasm_bindgen(js_name = "magSize" ,readonly)]
+    #[wasm_bindgen(js_name = "magSize", readonly)]
     pub mag_size: i32,
     #[wasm_bindgen(js_name = "reserveSize", readonly)]
     pub reserve_size: i32,
@@ -168,10 +175,6 @@ pub struct JsOptimalKillData {
     #[serde(rename = "timeTaken")]
     #[wasm_bindgen(js_name = "timeTaken")]
     pub time_taken: f64,
-    //defines how far away this ttk is achievalbe if all hits ar crits
-    #[serde(rename = "achievableRange")]
-    #[wasm_bindgen(js_name = "achievableRange")]
-    pub achievable_range: f64,
 }
 impl From<OptimalKillData> for JsOptimalKillData {
     fn from(optimal: OptimalKillData) -> Self {
@@ -179,7 +182,6 @@ impl From<OptimalKillData> for JsOptimalKillData {
             headshots: optimal.headshots,
             bodyshots: optimal.bodyshots,
             time_taken: optimal.time_taken,
-            achievable_range: optimal.achievable_range,
         }
     }
 }
@@ -311,6 +313,30 @@ pub struct JsMetaData {
     pub api_commit: &'static str,
     #[wasm_bindgen(js_name = "apiGitBranch", readonly)]
     pub api_branch: &'static str,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg(feature = "foundry")]
+#[wasm_bindgen(js_name = "ScalarResponseSummary", inspectable)]
+pub struct JsScalarResponse {
+    #[wasm_bindgen(js_name = "reloadScalar", readonly)]
+    pub reload_scalar: f64,
+    #[wasm_bindgen(js_name = "drawScalar", readonly)]
+    pub draw_scalar: f64,
+    #[wasm_bindgen(js_name = "adsScalar", readonly)]
+    pub ads_scalar: f64,
+    #[wasm_bindgen(js_name = "stowScalar", readonly)]
+    pub stow_scalar: f64,
+    #[wasm_bindgen(js_name = "globalRangeScalar", readonly)]
+    pub global_range_scalar: f64,
+    #[wasm_bindgen(js_name = "hipfireRangeScalar", readonly)]
+    pub hipfire_range_scalar: f64,
+    #[wasm_bindgen(js_name = "adsRangeScalar", readonly)]
+    pub ads_range_scalar: f64,
+    #[wasm_bindgen(js_name = "magSizeScalar", readonly)]
+    pub mag_size_scalar: f64,
+    #[wasm_bindgen(js_name = "reserveSizeScalar", readonly)]
+    pub reserve_size_scalar: f64,
 }
 
 #[derive(Debug, Clone)]

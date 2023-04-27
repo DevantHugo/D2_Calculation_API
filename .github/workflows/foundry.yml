@@ -1,4 +1,4 @@
-name: Rust
+name: Foundry
 
 on:
   push:
@@ -23,10 +23,9 @@ jobs:
     - name: Install Wasm-Pack
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --features wasm,foundry
     - name: Test
-      run: cargo test
+      run: cargo test --features wasm,foundry
     - name: Build Wasm target
-      run: wasm-pack build --target web --features wasm
-
+      run: wasm-pack build --target web --features wasm,foundry
 

@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::Write;
@@ -15,15 +15,15 @@ struct CachedBuildData {
 }
 impl CachedBuildData {
     fn has_data(&self) -> bool {
-        !self.last_manifest_version.is_empty() &&
-        !self.dim_perk_mappings.is_empty() &&
-        !self.procedural_intrinsic_mappings.is_empty() &&
-        !self.perk_formula_timestamps.is_empty()
+        !self.last_manifest_version.is_empty()
+            && !self.dim_perk_mappings.is_empty()
+            && !self.procedural_intrinsic_mappings.is_empty()
+            && !self.perk_formula_timestamps.is_empty()
     }
 
     fn get_timestamp(&mut self, formula: &impl UuidTimestamp) -> u64 {
         // get current unix time
-        let uuid = (formula.uuid()*10.0).to_bits() as u64;
+        let uuid = (formula.uuid() * 10.0).to_bits() as u64;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -41,6 +41,9 @@ impl CachedBuildData {
         self.procedural_intrinsic_mappings.sort();
     }
 }
+
+#[derive(Debug, Clone, Hash)]
+struct WeaponPath(u32, u32);
 
 trait UuidTimestamp {
     fn uuid(&self) -> f64;
@@ -88,7 +91,7 @@ impl From<&Map<String, Value>> for StatQuadraticFormula {
 }
 impl UuidTimestamp for StatQuadraticFormula {
     fn uuid(&self) -> f64 {
-        (self.evpp-11.0)*97293.0 + self.vpp*84892.0 + self.offset*3321.0
+        (self.evpp - 11.0) * 97293.0 + self.vpp * 84892.0 + self.offset * 3321.0
     }
 }
 
@@ -101,7 +104,7 @@ pub struct DamageMods {
     pub champion: f64,
     pub boss: f64,
     pub vehicle: f64,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for DamageMods {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -137,7 +140,7 @@ impl From<&Map<String, Value>> for DamageMods {
                 .unwrap_or(&json_1_float())
                 .as_f64()
                 .unwrap_or(1_f64),
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
@@ -152,13 +155,19 @@ impl DamageMods {
             champion: self.champion,
             boss: self.boss,
             vehicle: self.vehicle,
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for DamageMods {
     fn uuid(&self) -> f64 {
-        (self.pve-12.0)*6729.0 + self.minor*18342.0 + self.elite*88831.0 + self.miniboss*544.0 + self.champion*995.0 + self.boss*392.0 + self.vehicle*3223.0
+        (self.pve - 12.0) * 6729.0
+            + self.minor * 18342.0
+            + self.elite * 88831.0
+            + self.miniboss * 544.0
+            + self.champion * 995.0
+            + self.boss * 392.0
+            + self.vehicle * 3223.0
     }
 }
 
@@ -168,7 +177,7 @@ pub struct RangeFormula {
     pub end: StatQuadraticFormula,
     pub floor_percent: f64,
     pub fusion: bool,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for RangeFormula {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -189,13 +198,16 @@ impl From<&Map<String, Value>> for RangeFormula {
                 .unwrap_or(&Value::Bool(false))
                 .as_bool()
                 .unwrap_or(false),
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for RangeFormula {
     fn uuid(&self) -> f64 {
-        (self.start.uuid()+17.0)*920.0 + self.end.uuid() + self.floor_percent*92.0 + (self.fusion as u32) as f64*88.0
+        (self.start.uuid() + 17.0) * 920.0
+            + self.end.uuid()
+            + self.floor_percent * 92.0
+            + (self.fusion as u32) as f64 * 88.0
     }
 }
 
@@ -203,7 +215,7 @@ impl UuidTimestamp for RangeFormula {
 pub struct ReloadFormula {
     pub reload_data: StatQuadraticFormula,
     pub ammo_percent: f64,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for ReloadFormula {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -214,13 +226,13 @@ impl From<&Map<String, Value>> for ReloadFormula {
                 .unwrap_or(&json_0_float())
                 .as_f64()
                 .unwrap_or_default(),
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for ReloadFormula {
     fn uuid(&self) -> f64 {
-        (self.reload_data.uuid()+29.5)*72.0 + (self.ammo_percent+3.0)*12.0
+        (self.reload_data.uuid() + 29.5) * 72.0 + (self.ammo_percent + 3.0) * 12.0
     }
 }
 
@@ -229,7 +241,7 @@ pub struct HandlingFormula {
     pub ready: StatQuadraticFormula,
     pub stow: StatQuadraticFormula,
     pub ads: StatQuadraticFormula,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for HandlingFormula {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -237,13 +249,13 @@ impl From<&Map<String, Value>> for HandlingFormula {
             ready: StatQuadraticFormula::from(_val["ready"].as_object().unwrap_or(&Map::new())),
             stow: StatQuadraticFormula::from(_val["stow"].as_object().unwrap_or(&Map::new())),
             ads: StatQuadraticFormula::from(_val["ads"].as_object().unwrap_or(&Map::new())),
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for HandlingFormula {
     fn uuid(&self) -> f64 {
-        self.ready.uuid()*79.0 + self.stow.uuid()/2.0 + self.ads.uuid()*79.9
+        self.ready.uuid() * 79.0 + self.stow.uuid() / 2.0 + self.ads.uuid() * 79.9
     }
 }
 
@@ -252,7 +264,7 @@ pub struct AmmoFormula {
     pub mag: StatQuadraticFormula,
     pub round_to: i32,
     pub reserve_id: u32,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for AmmoFormula {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -268,13 +280,13 @@ impl From<&Map<String, Value>> for AmmoFormula {
                 .unwrap_or(&Value::Null)
                 .as_u64()
                 .unwrap_or_default() as u32,
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for AmmoFormula {
     fn uuid(&self) -> f64 {
-        self.mag.uuid()*99.0 + self.round_to as f64*6723.3 + self.reserve_id as f64*5299.2
+        self.mag.uuid() * 99.0 + self.round_to as f64 * 6723.3 + self.reserve_id as f64 * 5299.2
     }
 }
 
@@ -287,7 +299,7 @@ pub struct FiringData {
     pub burst_size: i32,
     pub one_ammo: bool,
     pub charge: bool,
-    pub timestamp: u64
+    pub timestamp: u64,
 }
 impl From<&Map<String, Value>> for FiringData {
     fn from(_val: &Map<String, Value>) -> Self {
@@ -307,19 +319,20 @@ impl From<&Map<String, Value>> for FiringData {
                 .unwrap_or(&Value::Bool(false))
                 .as_bool()
                 .unwrap_or(false),
-            timestamp: 0
+            timestamp: 0,
         }
     }
 }
 impl UuidTimestamp for FiringData {
     fn uuid(&self) -> f64 {
-        (self.damage*821.88 +
-        self.crit_mult*388.1 +
-        self.burst_delay*9999.7 +
-        self.inner_burst_delay*7234.9 +
-        self.burst_size as f64*999.3 +
-        (self.one_ammo as u32) as f64*16655.5 +
-        (self.charge as u32) as f64*7388.9)*10.0
+        (self.damage * 821.88
+            + self.crit_mult * 388.1
+            + self.burst_delay * 9999.7
+            + self.inner_burst_delay * 7234.9
+            + self.burst_size as f64 * 999.3
+            + (self.one_ammo as u32) as f64 * 16655.5
+            + (self.charge as u32) as f64 * 7388.9)
+            * 10.0
     }
 }
 
@@ -366,24 +379,30 @@ fn main() {
     //write imports in file
     let res = writeln!(
         formula_file,
-        "use crate::types::rs_types::{{StatQuadraticFormula, RangeFormula, HandlingFormula, ReloadFormula, DamageMods, AmmoFormula, DataPointers, FiringData}};");
+        "use crate::types::rs_types::{{StatQuadraticFormula, RangeFormula, HandlingFormula, ReloadFormula, DamageMods, AmmoFormula, DataPointers, FiringData, WeaponPath}};");
     if res.is_err() {
         panic!("cargo:warning=error writing imports");
     }
 
+    let build_cache_path = std::path::Path::new("./build_resources/cached_build.ron");
     let mut cached_data: CachedBuildData;
-    let file_res = std::fs::File::open("./build_resources/cached_build.ron");
-    if file_res.is_err() {
+    //if "./build_resources/cached_build.ron" exists
+    if !build_cache_path.exists() {
         println!("cargo:warning=no cached build file found");
         cached_data = CachedBuildData::default();
     } else {
-        let file = file_res.unwrap();
-        let res = ron::de::from_reader(file);
-        if res.is_err() {
-            println!("cargo:warning=error reading cached build file");
+        let file_res = std::fs::File::open(build_cache_path);
+        if file_res.is_err() {
+            println!("cargo:warning=error opening cached build file: {}", file_res.err().unwrap());
             cached_data = CachedBuildData::default();
         } else {
-            cached_data = res.unwrap();
+            let file = file_res.unwrap();
+            let res = ron::de::from_reader(file);
+            if res.is_err() {
+                panic!("cargo:warning=error reading cached build file");
+            } else {
+                cached_data = res.unwrap();
+            }
         }
     }
 
@@ -392,15 +411,29 @@ fn main() {
 
     cached_data.sort();
 
+    //check if being run by rust-analyzer
+    let is_rust_analyzer = std::env::var("IS_RA");
+    if is_rust_analyzer.is_ok() {
+        if is_rust_analyzer.unwrap() == "true" {
+            println!("cargo:warning=running in rust-analyzer");
+            return;
+        }
+    }
+
     let file_res = std::fs::File::create("./build_resources/cached_build.ron");
     if file_res.is_err() {
         println!("cargo:warning=error writing cached build file");
     } else {
-        let file = file_res.unwrap();
-        let res = ron::ser::to_writer_pretty(file, &cached_data, ron::ser::PrettyConfig::default());
+        let mut file = file_res.unwrap();
+        // let serializer = ron::ser::Serializer::new(file, None);
+        let res = ron::ser::to_string_pretty(&cached_data, ron::ser::PrettyConfig::default());
         if res.is_err() {
-            println!("cargo:warning=error writing cached build file");
+            panic!("cargo:warning=error initializing ron serializer");
+        } else {
+            #[allow(unused_variables)]
+            let cd: CachedBuildData = ron::de::from_str(&res.clone().unwrap()).expect("cargo:warning=error deserializing");
         }
+        file.write_all(res.unwrap().as_bytes()).expect("cargo:warning=error writing cached build file");
     }
 }
 
@@ -460,7 +493,7 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
     let mut firing_data: Vec<FiringData> = vec![FiringData::default()];
     let mut scalar_data: Vec<DamageMods> = vec![DamageMods::default()];
 
-    let mut updated_weapon_defs: Vec<(u32, DataPointers)> = Vec::new();
+    let mut updated_weapon_defs: Vec<(WeaponPath, DataPointers)> = Vec::new();
     for (weapon_id, inner_values) in new_jdata.as_object().unwrap() {
         for (weapon_hash, weapon_def) in inner_values.as_object().unwrap() {
             let mut data = DataPointers::default();
@@ -559,7 +592,7 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
                 if index_option.is_some() {
                     data.rl = index_option.unwrap();
                 } else {
-                    data.rl = reload_data.len()-1;
+                    data.rl = reload_data.len();
                     reload.timestamp = cached.get_timestamp(&reload);
                     reload_data.push(reload);
                 }
@@ -581,7 +614,7 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
                 if index_option.is_some() {
                     data.r = index_option.unwrap();
                 } else {
-                    data.r = range_data.len()-1;
+                    data.r = range_data.len();
                     range.timestamp = cached.get_timestamp(&range);
                     range_data.push(range);
                 }
@@ -603,7 +636,7 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
                 if index_option.is_some() {
                     data.h = index_option.unwrap();
                 } else {
-                    data.h = handling_data.len()-1;
+                    data.h = handling_data.len();
                     handling.timestamp = cached.get_timestamp(&handling);
                     handling_data.push(handling);
                 }
@@ -632,7 +665,7 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
                 if index_option.is_some() {
                     data.s = index_option.unwrap();
                 } else {
-                    data.s = scalar_data.len()-1;
+                    data.s = scalar_data.len();
                     scalar.timestamp = cached.get_timestamp(&scalar);
                     scalar_data.push(scalar);
                 }
@@ -642,14 +675,14 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
                 if index_option.is_some() {
                     data.a = index_option.unwrap();
                 } else {
-                    data.a = ammo_data.len()-1;
+                    data.a = ammo_data.len();
                     ammo.timestamp = cached.get_timestamp(&ammo);
                     ammo_data.push(ammo);
                 }
 
                 let mut firing: FiringData = (&fam).into();
-                firing.burst_delay *= 1.0/30.0;
-                firing.inner_burst_delay *= 1.0/30.0;
+                firing.burst_delay *= 1.0 / 30.0;
+                firing.inner_burst_delay *= 1.0 / 30.0;
                 firing.crit_mult = 1.5 + (firing.crit_mult / 51.0);
                 let index_option = find_uuid(&firing_data, firing.uuid());
                 if index_option.is_some() {
@@ -669,24 +702,23 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
             if set_data_res.is_err() {
                 println!("cargo:warning={:?}", set_data_res.unwrap_err());
             }
-            updated_weapon_defs.push((weapon_hash.parse::<u32>().unwrap(), data));
+            updated_weapon_defs.push((
+                WeaponPath(
+                    weapon_id.parse::<u32>().unwrap(),
+                    weapon_hash.parse::<u32>().unwrap(),
+                ),
+                data,
+            ));
         }
-    }
-
-    let expected_formulas = scalar_data.len()-1 +
-        ammo_data.len()-1 +
-        firing_data.len()-1 +
-        range_data.len()-1 +
-        handling_data.len()-1 +
-        reload_data.len()-1;
-    if expected_formulas != cached.perk_formula_timestamps.len() {
-        panic!("cargo:warning=Expected {} formulas, got {}", expected_formulas, cached.perk_formula_timestamps.len());
     }
 
     write_variable(
         formula_file,
         "DATA_POINTERS",
-        &format!("[(u32, DataPointers); {}]", updated_weapon_defs.len()),
+        &format!(
+            "[(WeaponPath, DataPointers); {}]",
+            updated_weapon_defs.len()
+        ),
         format!("{:?}", updated_weapon_defs),
         "Hashmapping for weapon intrinsic hash to data pointers",
     );
@@ -736,7 +768,11 @@ fn construct_weapon_formulas(formula_file: &mut File, cached: &mut CachedBuildDa
 
 fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBuildData) {
     let ping = reqwest::blocking::get("https://www.bungie.net");
-    let has_internet = if ping.is_ok() {ping.unwrap().status() == reqwest::StatusCode::OK} else { false};
+    let has_internet = if ping.is_ok() {
+        ping.unwrap().status() == reqwest::StatusCode::OK
+    } else {
+        false
+    };
 
     if !has_internet {
         println!("cargo:warning=no internet connection");
@@ -776,7 +812,7 @@ fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBu
     if has_internet {
         let mut manifest_secured: bool;
         let manifest_raw =
-                reqwest::blocking::get("https://www.bungie.net/Platform/Destiny2/Manifest/");
+            reqwest::blocking::get("https://www.bungie.net/Platform/Destiny2/Manifest/");
         let manifest_text: String;
         if manifest_raw.is_ok() {
             manifest_text = manifest_raw.unwrap().text().unwrap();
@@ -811,7 +847,10 @@ fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBu
                 let mut cached_manifest_mappings = cached.procedural_intrinsic_mappings.clone();
                 perk_mappings.append(&mut cached_manifest_mappings);
             } else {
-                cached.last_manifest_version = manifest_json["Response"]["version"].as_str().unwrap().to_owned();
+                cached.last_manifest_version = manifest_json["Response"]["version"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned();
                 let intrinsic_map: HashMap<u32, Vec<&str>> = HashMap::from([
                     (901, vec!["High-Impact Frame"]),
                     (902, vec!["VEIST Rapid-Fire", "Rapid-Fire Frame"]),
@@ -823,7 +862,8 @@ fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBu
                     (908, vec!["Wave Frame"]),
                     (911, vec!["Legacy PR-55 Frame"]),
                 ]);
-                let content_paths = manifest_json["Response"]["jsonWorldComponentContentPaths"]["en"]
+                let content_paths = manifest_json["Response"]["jsonWorldComponentContentPaths"]
+                    ["en"]
                     .as_object()
                     .unwrap();
                 let item_data_raw = reqwest::blocking::get(format!(
@@ -833,6 +873,7 @@ fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBu
                         .unwrap()
                 ));
                 println!("cargo:warning=downloaded new manifest");
+                cached.procedural_intrinsic_mappings.clear();
                 let item_data_json: Value =
                     serde_json::from_str(&item_data_raw.unwrap().text().unwrap()).unwrap();
                 for (key, value) in item_data_json.as_object().unwrap() {
@@ -862,7 +903,7 @@ fn construct_enhance_perk_mapping(formula_file: &mut File, cached: &mut CachedBu
                 }
             }
         }
-    } else { 
+    } else {
         let mut cached_manifest_mappings = cached.procedural_intrinsic_mappings.clone();
         perk_mappings.append(&mut cached_manifest_mappings);
     }

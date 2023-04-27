@@ -6,10 +6,12 @@ pub mod abilities;
 pub mod activity;
 pub mod d2_enums;
 pub mod enemies;
+pub mod logging;
 pub mod perks;
+#[cfg(test)]
+mod test;
 pub mod types;
 pub mod weapons;
-pub mod logging;
 
 use crate::perks::{Perk, Perks};
 use crate::weapons::{Stat, Weapon};
@@ -31,19 +33,22 @@ mod database {
 
 //JavaScript
 #[cfg(feature = "wasm")]
-use crate::types::js_types::{JsStat, JsRangeResponse, JsHandlingResponse, 
-    JsReloadResponse, JsAmmoResponse, JsDpsResponse, JsFiringResponse, 
-    JsDifficultyOptions, JsEnemyType, JsMetaData, JsResillienceSummary};
+use crate::types::js_types::{
+    JsAmmoResponse, JsDifficultyOptions, JsDpsResponse, JsEnemyType, JsFiringResponse,
+    JsHandlingResponse, JsMetaData, JsRangeResponse, JsReloadResponse, JsResillienceSummary,
+    JsStat,
+};
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
+
+#[cfg(all(feature = "wasm", feature = "foundry"))]
+use crate::types::js_types::JsScalarResponse;
 
 //python
 #[cfg(feature = "python")]
 use crate::types::py_types::{
-    PyActivity, PyDifficultyOptions, PyDpsResponse, PyEnemy,
-    PyEnemyType, PyHandlingResponse, PyPerk, PyPlayer,
-    PyPlayerClass, PyRangeResponse,
-    PyResillienceSummary, PyFiringResponse
+    PyActivity, PyDifficultyOptions, PyDpsResponse, PyEnemy, PyEnemyType, PyFiringResponse,
+    PyHandlingResponse, PyPerk, PyPlayer, PyPlayerClass, PyRangeResponse, PyResillienceSummary,
 };
 #[cfg(feature = "python")]
 use pyo3::{prelude::*, types::PyDict};
@@ -83,6 +88,7 @@ macro_rules! console_log {
 #[wasm_bindgen(start)]
 pub fn start() {
     panic::set_hook(Box::new(console_error_panic_hook::hook));
+    perks::map_perks();
     console_log!("D2 Calculator Loaded");
 }
 
@@ -91,7 +97,7 @@ pub fn start() {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "getMetadata")]
 pub fn get_metadata() -> Result<JsMetaData, JsValue> {
-    let metadata = JsMetaData{
+    let metadata = JsMetaData {
         api_timestamp: built_info::BUILT_TIME_UTC,
         api_version: built_info::PKG_VERSION,
         api_commit: built_info::GIT_COMMIT_HASH.unwrap(),
@@ -149,10 +155,8 @@ pub fn set_weapon(
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "getStats")]
-pub fn get_stats(_clamp: bool) -> Result<JsValue, JsValue> {
-    let stat_map = PERS_DATA.with(|perm_data| {
-        perm_data.borrow().weapon.stats.clone()
-    });
+pub fn get_stats() -> Result<JsValue, JsValue> {
+    let stat_map = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.stats.clone());
     let mut js_stat_map = HashMap::new();
     for (key, value) in stat_map {
         js_stat_map.insert(key, JsStat::from(value));
@@ -184,14 +188,10 @@ pub fn add_perk(_stats: JsValue, _value: u32, _hash: u32) -> Result<(), JsValue>
         stat_buffs: serde_wasm_bindgen::from_value(_stats).unwrap(),
         enhanced: data.1,
         value: _value,
+        raw_hash: _hash,
         hash: data.0,
     };
-    PERS_DATA.with(|perm_data| {
-        perm_data
-            .borrow_mut()
-            .weapon
-            .add_perk(perk)
-    });
+    PERS_DATA.with(|perm_data| perm_data.borrow_mut().weapon.add_perk(perk));
     Ok(())
 }
 
@@ -204,11 +204,12 @@ pub fn query_perks() -> Vec<u32> {
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "setTraitValue")]
 pub fn change_perk_value(perk_hash: u32, new_value: u32) {
+    let data = perks::enhanced_check(perk_hash);
     PERS_DATA.with(|perm_data| {
         perm_data
             .borrow_mut()
             .weapon
-            .change_perk_val(perk_hash, new_value)
+            .change_perk_val(data.0, new_value)
     });
 }
 
@@ -218,7 +219,9 @@ pub fn get_perk_options_js(_perks: Vec<u32>) -> Result<JsValue, JsValue> {
     let options = perks::perk_options_handler::get_perk_options(_perks);
     let value = serde_wasm_bindgen::to_value(&options);
     if value.is_err() {
-        return Err(JsValue::from_str("Could not convert perk options to JsValue"));
+        return Err(JsValue::from_str(
+            "Could not convert perk options to JsValue",
+        ));
     }
     Ok(value.unwrap())
 }
@@ -238,7 +241,10 @@ pub fn get_weapon_range(_dynamic_traits: bool, _pvp: bool) -> Result<JsRangeResp
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "getWeaponHandlingTimes")]
-pub fn get_weapon_handling(_dynamic_traits: bool, _pvp: bool) -> Result<JsHandlingResponse, JsValue> {
+pub fn get_weapon_handling(
+    _dynamic_traits: bool,
+    _pvp: bool,
+) -> Result<JsHandlingResponse, JsValue> {
     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
     if _dynamic_traits {
         Ok(weapon
@@ -284,23 +290,28 @@ pub fn get_weapon_ttk(_overshield: f64) -> Result<JsValue, JsValue> {
     Ok(serde_wasm_bindgen::to_value(&js_ttk_data).unwrap())
 }
 
-#[cfg(feature = "wasm")]
-#[wasm_bindgen(js_name = "getWeaponDps")]
-pub fn get_weapon_dps(_use_rpl: bool) -> Result<JsDpsResponse, JsValue> {
-    let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
-    let enemy = PERS_DATA.with(|perm_data| perm_data.borrow().enemy.clone());
-    let pl_dmg_mult = PERS_DATA.with(|perm_data| perm_data.borrow().activity.get_pl_delta());
-    let mut dps_response = weapon.calc_dps(enemy, pl_dmg_mult);
-    let rpl_mult = PERS_DATA.with(|perm_data| perm_data.borrow().activity.get_rpl_mult());
-    if _use_rpl {
-        dps_response.apply_rpl(rpl_mult)
-    }
-    Ok(dps_response.into())
-}
+///DEPRECATED for now
+// #[cfg(feature = "wasm")]
+// #[wasm_bindgen(js_name = "getWeaponDps")]
+// pub fn get_weapon_dps(_use_rpl: bool) -> Result<JsDpsResponse, JsValue> {
+//     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
+//     let enemy = PERS_DATA.with(|perm_data| perm_data.borrow().enemy.clone());
+//     let pl_dmg_mult = PERS_DATA.with(|perm_data| perm_data.borrow().activity.get_pl_delta());
+//     let mut dps_response = weapon.calc_dps(enemy, pl_dmg_mult);
+//     let rpl_mult = PERS_DATA.with(|perm_data| perm_data.borrow().activity.get_rpl_mult());
+//     if _use_rpl {
+//         dps_response.apply_rpl(rpl_mult)
+//     }
+//     Ok(dps_response.into())
+// }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "getWeaponFiringData")]
-pub fn get_weapon_firing_data(_dynamic_traits: bool, _pvp: bool, _use_rpl: bool) -> Result<JsFiringResponse, JsValue> {
+pub fn get_weapon_firing_data(
+    _dynamic_traits: bool,
+    _pvp: bool,
+    _use_rpl: bool,
+) -> Result<JsFiringResponse, JsValue> {
     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
     let mut response: types::rs_types::FiringResponse;
     if _dynamic_traits {
@@ -313,32 +324,65 @@ pub fn get_weapon_firing_data(_dynamic_traits: bool, _pvp: bool, _use_rpl: bool)
             perm_data.borrow().activity.get_rpl_mult(),
             perm_data.borrow().activity.get_pl_delta(),
             perm_data.borrow().weapon.damage_mods.pve,
-            perm_data.borrow().weapon.damage_mods.get_mod(&perm_data.borrow().enemy.type_))
+            perm_data
+                .borrow()
+                .weapon
+                .damage_mods
+                .get_mod(&perm_data.borrow().enemy.type_),
+        )
     });
     Ok(response.into())
 }
 
 #[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "getWeaponFlinch")]
-pub fn get_weapon_flinch(_dynamic_traits: bool, _pvp: bool, _resilience: u8) -> Result<f64, JsValue> {
+pub fn get_weapon_flinch(
+    _dynamic_traits: bool,
+    _pvp: bool,
+    _resilience: u8,
+) -> Result<f64, JsValue> {
     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
     if _dynamic_traits {
-        Ok(weapon
-            .calc_flinch_resist(Some(weapon.static_calc_input()), _resilience as i32, _pvp, None))
+        Ok(weapon.calc_flinch_resist(
+            Some(weapon.static_calc_input()),
+            _resilience as i32,
+            _pvp,
+            None,
+        ))
     } else {
         Ok(weapon.calc_flinch_resist(None, _resilience as i32, _pvp, None))
     }
 }
 
 #[cfg(feature = "wasm")]
+#[wasm_bindgen(js_name = "getMiscData")]
+pub fn get_misc_data(_dynamic_traits: bool, _pvp: bool) -> Result<JsValue, JsValue> {
+    let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
+    if _dynamic_traits {
+        Ok(serde_wasm_bindgen::to_value(
+            &weapon.get_misc_stats(Some(weapon.static_calc_input()), _pvp),
+        )
+        .unwrap())
+    } else {
+        Ok(serde_wasm_bindgen::to_value(&weapon.get_misc_stats(None, _pvp)).unwrap())
+    }
+}
+
+#[cfg(feature = "wasm")]
 #[wasm_bindgen(js_name = "setEncounter")]
-pub fn set_encounter(_rpl: u32, _override_cap: i32, _difficulty: JsDifficultyOptions, _enemy_type: JsEnemyType) -> Result<(), JsValue> {
+pub fn set_encounter(
+    _reccomended_pl: u32,
+    _player_pl: u32,
+    _override_cap: i32,
+    _difficulty: JsDifficultyOptions,
+    _enemy_type: JsEnemyType,
+) -> Result<(), JsValue> {
     PERS_DATA.with(|perm_data| {
         let mut activity = &mut perm_data.borrow_mut().activity;
-        activity.rpl = _rpl;
+        activity.rpl = _reccomended_pl;
         activity.cap = _override_cap;
         activity.difficulty = _difficulty.into();
-        activity.player.pl = 2000;
+        activity.player.pl = _player_pl;
     });
     PERS_DATA.with(|perm_data| {
         let mut enemy = &mut perm_data.borrow_mut().enemy;
@@ -357,11 +401,41 @@ pub fn set_logging_level(_level: usize) -> Result<(), JsValue> {
 }
 
 #[cfg(feature = "wasm")]
-#[wasm_bindgen(js_name = "getModifierResponse")]
+#[wasm_bindgen(js_name = "getModifierResponseSummary")]
 pub fn get_modifier_response(_dynamic_traits: bool, _pvp: bool) -> Result<JsValue, JsValue> {
     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
-    let modifier = weapon.get_modifier_summary(_dynamic_traits.then_some(weapon.static_calc_input()), _pvp, None);
+    let modifier = weapon.get_modifier_summary(
+        _dynamic_traits.then_some(weapon.static_calc_input()),
+        _pvp,
+        None,
+    );
     Ok(serde_wasm_bindgen::to_value(&modifier).unwrap())
+}
+
+#[cfg(all(feature = "wasm", feature = "foundry"))]
+#[wasm_bindgen(js_name = "getScalarResponseSummary")]
+pub fn get_scalar_response(_pvp: bool) -> Result<JsScalarResponse, JsValue> {
+    let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
+    let input_data = weapon.static_calc_input();
+    let mut cached_data = HashMap::new();
+    let rmr = perks::get_range_modifier(weapon.list_perks(), &input_data, _pvp, &mut cached_data);
+    let rsmr = perks::get_reload_modifier(weapon.list_perks(), &input_data, _pvp, &mut cached_data);
+    let mmr =
+        perks::get_magazine_modifier(weapon.list_perks(), &input_data, _pvp, &mut cached_data);
+    let hmr =
+        perks::get_handling_modifier(weapon.list_perks(), &input_data, _pvp, &mut cached_data);
+    let imr = perks::get_reserve_modifier(weapon.list_perks(), &input_data, _pvp, &mut cached_data);
+    Ok(JsScalarResponse {
+        ads_range_scalar: rmr.range_zoom_scale,
+        global_range_scalar: rmr.range_all_scale,
+        hipfire_range_scalar: rmr.range_hip_scale,
+        ads_scalar: hmr.ads_scale,
+        draw_scalar: hmr.draw_scale,
+        stow_scalar: hmr.stow_scale,
+        reload_scalar: rsmr.reload_time_scale,
+        mag_size_scalar: mmr.magazine_scale,
+        reserve_size_scalar: imr.inv_scale,
+    })
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -448,7 +522,11 @@ fn get_weapon_handling(_use_traits: bool, _pvp: bool) -> PyResult<PyHandlingResp
 
 #[cfg(feature = "python")]
 #[pyfunction(name = "get_firing_data")]
-fn get_firing_data(_dynamic_traits: bool, _pvp: bool, _use_rpl: bool) -> PyResult<PyFiringResponse> {
+fn get_firing_data(
+    _dynamic_traits: bool,
+    _pvp: bool,
+    _use_rpl: bool,
+) -> PyResult<PyFiringResponse> {
     let weapon = PERS_DATA.with(|perm_data| perm_data.borrow().weapon.clone());
     let mut response: types::rs_types::FiringResponse;
     if _dynamic_traits {
@@ -461,7 +539,12 @@ fn get_firing_data(_dynamic_traits: bool, _pvp: bool, _use_rpl: bool) -> PyResul
             perm_data.borrow().activity.get_rpl_mult(),
             perm_data.borrow().activity.get_pl_delta(),
             perm_data.borrow().weapon.damage_mods.pve,
-            perm_data.borrow().weapon.damage_mods.get_mod(&perm_data.borrow().enemy.type_))
+            perm_data
+                .borrow()
+                .weapon
+                .damage_mods
+                .get_mod(&perm_data.borrow().enemy.type_),
+        )
     });
     Ok(response.into())
 }
@@ -508,6 +591,32 @@ fn set_weapon_stats(_in: &PyDict) {
 }
 
 #[cfg(feature = "python")]
+#[pyfunction(name = "reverse_pve_calc")]
+fn reverse_pve_calc(
+    _damage: f64,
+    _combatant_mult: Option<f64>,
+    _pve_mult: Option<f64>,
+) -> PyResult<f64> {
+    use logging::extern_log;
+    let output = PERS_DATA.with(|perm_data| {
+        let combatant_mult = _combatant_mult.unwrap_or(1.0);
+        let pve_mult = _pve_mult.unwrap_or(1.0);
+        if perm_data.borrow().activity.name == "Default" {
+            extern_log(
+                "Activity is default and can return bad values",
+                LogLevel::Warning,
+            )
+        }
+        activity::damage_calc::remove_pve_bonuses(
+            _damage,
+            combatant_mult,
+            &perm_data.borrow().activity,
+        ) / pve_mult
+    });
+    Ok(output)
+}
+
+#[cfg(feature = "python")]
 fn register_weapon_interface(py: Python<'_>, parent_module: &PyModule) -> PyResult<()> {
     let weapon_interface = PyModule::new(py, "WeaponInterface")?;
     //functions
@@ -522,8 +631,9 @@ fn register_weapon_interface(py: Python<'_>, parent_module: &PyModule) -> PyResu
     weapon_interface.add_function(wrap_pyfunction!(get_weapon_ttk, weapon_interface)?)?;
     weapon_interface.add_function(wrap_pyfunction!(set_weapon_stats, weapon_interface)?)?;
     weapon_interface.add_function(wrap_pyfunction!(get_firing_data, weapon_interface)?)?;
+    weapon_interface.add_function(wrap_pyfunction!(reverse_pve_calc, weapon_interface)?)?;
 
-    //classes;
+    //classes
     weapon_interface.add_class::<PyPerk>()?;
     weapon_interface.add_class::<PyRangeResponse>()?;
     weapon_interface.add_class::<PyHandlingResponse>()?;

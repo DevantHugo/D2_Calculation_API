@@ -1,11 +1,15 @@
 use crate::{
+<<<<<<< HEAD
     d2_enums::{AmmoType, DamageType, StatHashes, WeaponType, StatBump, BungieHash, DamageSource},
+=======
+    d2_enums::{AmmoType, BungieHash, DamageSource, DamageType, StatBump, StatHashes, WeaponType},
+>>>>>>> aac4247f389f7bb3981048ce55a22baf34cd4313
     enemies::EnemyType,
-    types::rs_types::{HandlingResponse, FiringData},
+    types::rs_types::{FiringData, HandlingResponse},
     weapons::Stat,
 };
-use std::{cell::RefCell, collections::HashMap, ops::Mul};
 use serde::Serialize;
+use std::{cell::RefCell, collections::HashMap, ops::Mul};
 
 #[derive(Debug, Clone)]
 pub struct CalculationInput<'a> {
@@ -112,6 +116,7 @@ impl<'a> CalculationInput<'a> {
         _perk_value_map: &'a HashMap<u32, u32>,
         _weapon_type: &'a WeaponType,
         _ammo_type: &'a AmmoType,
+        _damage_type: &'a DamageType,
         _crit_mult: f64,
     ) -> Self {
         Self {
@@ -128,7 +133,7 @@ impl<'a> CalculationInput<'a> {
             time_this_mag: 0.0,
             stats: _stats,
             weapon_type: _weapon_type,
-            damage_type: &DamageType::STASIS,
+            damage_type: _damage_type,
             ammo_type: _ammo_type,
             handling_data: HandlingResponse::default(),
             num_reloads: 0.0,
@@ -224,16 +229,19 @@ impl Default for FiringModifierResponse {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct HandlingModifierResponse {
-    pub handling_stat_add: i32,
-    pub handling_swap_scale: f64,
-    pub handling_ads_scale: f64,
+    pub stat_add: i32,
+    pub stow_scale: f64,
+    pub draw_scale: f64,
+    // pub handling_swap_scale: f64,
+    pub ads_scale: f64,
 }
 impl Default for HandlingModifierResponse {
     fn default() -> Self {
         Self {
-            handling_stat_add: 0,
-            handling_swap_scale: 1.0,
-            handling_ads_scale: 1.0,
+            stat_add: 0,
+            stow_scale: 1.0,
+            draw_scale: 1.0,
+            ads_scale: 1.0,
         }
     }
 }
@@ -375,7 +383,11 @@ pub struct DamageResistModifierResponse {
     pub source: Option<DamageSource>,
 }
 impl Default for DamageResistModifierResponse {
+<<<<<<< HEAD
     fn default() -> Self { 
+=======
+    fn default() -> Self {
+>>>>>>> aac4247f389f7bb3981048ce55a22baf34cd4313
         Self {
             body_shot_resist: 1.0,
             head_shot_resist: 1.0,
@@ -386,10 +398,14 @@ impl Default for DamageResistModifierResponse {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
+<<<<<<< HEAD
 pub struct ModifierResponseSummary{
+=======
+pub struct ModifierResponseSummary {
+>>>>>>> aac4247f389f7bb3981048ce55a22baf34cd4313
     pub rmr: Option<RangeModifierResponse>,
-    pub dmr: Option<DamageModifierResponse>, 
-    pub hmr: Option<HandlingModifierResponse>, 
+    pub dmr: Option<DamageModifierResponse>,
+    pub hmr: Option<HandlingModifierResponse>,
     pub fmr: Option<FiringModifierResponse>,
     pub flmr: Option<FlinchModifierResponse>,
     pub rsmr: Option<ReloadModifierResponse>,
@@ -398,7 +414,6 @@ pub struct ModifierResponseSummary{
     pub drmr: Option<DamageResistModifierResponse>,
     pub statbump: Option<HashMap<BungieHash, StatBump>>,
 }
-    
 
 impl Default for ModifierResponseSummary {
     fn default() -> Self {
@@ -416,4 +431,3 @@ impl Default for ModifierResponseSummary {
         }
     }
 }
-
