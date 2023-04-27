@@ -24,6 +24,7 @@ use serde::{Deserialize, Serialize};
 use crate::d2_enums::{BungieHash, StatBump, StatHashes, WeaponType};
 use crate::database;
 
+use self::lib::DamageResistModifierResponse;
 use self::{
     buff_perks::*,
     exotic_armor::*,
@@ -447,6 +448,7 @@ pub struct PersistentModifierResponses {
     pub epr: HashMap<Perks, Box<dyn Fn(ModifierResponseInput) -> ExplosivePercentResponse>>,
     pub mmr: HashMap<Perks, Box<dyn Fn(ModifierResponseInput) -> MagazineModifierResponse>>,
     pub imr: HashMap<Perks, Box<dyn Fn(ModifierResponseInput) -> InventoryModifierResponse>>,
+    pub drmr: HashMap<Perks, Box<dyn Fn(ModifierResponseInput) -> DamageResistModifierResponse>>,
 }
 impl PersistentModifierResponses {
     fn is_empty(&self) -> bool {
@@ -568,6 +570,13 @@ impl PersistentModifierResponses {
             InventoryModifierResponse::default()
         }
     }
+    fn get_drmr(&self, perk: Perks, input: ModifierResponseInput) -> DamageResistModifierResponse {
+        if let Some(func) = self.drmr.get(&perk) {
+            func(input)
+        } else {
+            DamageResistModifierResponse::default()
+        }
+    }
 }
 
 fn add_sbr(perk: Perks, func: Box<dyn Fn(ModifierResponseInput) -> HashMap<BungieHash, StatBump>>) {
@@ -633,6 +642,12 @@ fn add_mmr(perk: Perks, func: Box<dyn Fn(ModifierResponseInput) -> MagazineModif
 fn add_imr(perk: Perks, func: Box<dyn Fn(ModifierResponseInput) -> InventoryModifierResponse>) {
     PERK_FUNC_MAP.with(|map| {
         map.borrow_mut().imr.insert(perk, func);
+    });
+}
+
+fn add_drmr(perk: Perks, func: Box<dyn Fn(ModifierResponseInput) -> DamageResistModifierResponse>) {
+    PERK_FUNC_MAP.with(|map| {
+        map.borrow_mut().drmr.insert(perk, func);
     });
 }
 
